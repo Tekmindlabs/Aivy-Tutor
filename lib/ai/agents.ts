@@ -1,51 +1,91 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { AgentGraph } from "langgraph";
+// /lib/ai/agents.ts
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
+// Define different agent types
+type AgentRole = 'master' | 'emotional' | 'tutor' | 'researcher' | 'validator';
 
-// Define agent types
 type AgentState = {
   messages: string[];
   currentStep: string;
   emotionalState: string;
+  context: {
+    role: AgentRole;
+    analysis: any;
+    recommendations: any;
+  };
 };
 
-// Create the tutor agent
-export const createTutorAgent = async () => {
+// Create specialized agents
+const createEmotionalAgent = (model: any) => async (state: AgentState) => {
+  const result = await model.generateContent(`
+    Analyze emotional state: "${state.messages[state.messages.length - 1]}"
+  `);
+  return {
+    ...state,
+    context: {
+      ...state.context,
+      analysis: { emotional: result.response.text() }
+    }
+  };
+};
+
+const createResearcherAgent = (model: any) => async (state: AgentState) => {
+  const result = await model.generateContent(`
+    Research context for: "${state.messages[state.messages.length - 1]}"
+    Provide relevant educational resources and concepts.
+  `);
+  return {
+    ...state,
+    context: {
+      ...state.context,
+      analysis: { research: result.response.text() }
+    }
+  };
+};
+
+const createValidatorAgent = (model: any) => async (state: AgentState) => {
+  const result = await model.generateContent(`
+    Validate accuracy of response considering:
+    Emotional state: ${state.context.analysis.emotional}
+    Research: ${state.context.analysis.research}
+  `);
+  return {
+    ...state,
+    context: {
+      ...state.context,
+      recommendations: result.response.text()
+    }
+  };
+};
+
+// Master agent to orchestrate
+const createMasterAgent = (model: any) => async (state: AgentState) => {
+  const result = await model.generateContent(`
+    Synthesize final response based on:
+    Emotional analysis: ${state.context.analysis.emotional}
+    Research context: ${state.context.analysis.research}
+    Validation: ${state.context.recommendations}
+    
+    Create a comprehensive, empathetic, and accurate response.
+  `);
+  return {
+    ...state,
+    messages: [...state.messages, result.response.text()]
+  };
+};
+
+// Create the orchestrated workflow
+export const createOrchestrationAgent = async () => {
   const model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-  const emotionalAnalysis = async (state: AgentState) => {
-    const lastMessage = state.messages[state.messages.length - 1];
-    const result = await model.generateContent(`
-      Analyze the emotional state in this message: "${lastMessage}"
-      Provide a brief emotional assessment.
-    `);
-    return {
-      ...state,
-      emotionalState: result.response.text(),
-    };
-  };
-
-  const generateResponse = async (state: AgentState) => {
-    const prompt = `
-      You are an empathetic AI tutor. Based on the student's emotional state: ${state.emotionalState}
-      Respond to: "${state.messages[state.messages.length - 1]}"
-      Provide a supportive and educational response.
-    `;
-    
-    const result = await model.generateContent(prompt);
-    return {
-      ...state,
-      messages: [...state.messages, result.response.text()],
-    };
-  };
-
-  // Create agent workflow
   const workflow = new AgentGraph()
-    .addNode("emotional_analysis", emotionalAnalysis)
-    .addNode("generate_response", generateResponse)
+    .addNode("emotional_analysis", createEmotionalAgent(model))
+    .addNode("research", createResearcherAgent(model))
+    .addNode("validation", createValidatorAgent(model))
+    .addNode("master", createMasterAgent(model))
     .setEntryPoint("emotional_analysis")
-    .addEdge("emotional_analysis", "generate_response");
+    .addEdge("emotional_analysis", "research")
+    .addEdge("research", "validation")
+    .addEdge("validation", "master");
 
   return workflow;
 };

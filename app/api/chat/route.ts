@@ -1,10 +1,6 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-import { StreamingTextResponse, LangChainStream } from "ai";
-import { NextRequest } from "next/server";
-import { getSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
+// /app/api/chat/route.ts
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
+import { createOrchestrationAgent } from "@/lib/ai/agents";
 
 export async function POST(req: NextRequest) {
   try {
@@ -27,17 +23,21 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const genModel = genAI.getGenerativeModel({ model });
+    // Use orchestrated workflow
+    const workflow = await createOrchestrationAgent();
+    const initialState = {
+      messages: [lastMessage],
+      currentStep: "emotional_analysis",
+      emotionalState: "",
+      context: {
+        role: "master",
+        analysis: {},
+        recommendations: {}
+      }
+    };
 
-    // Generate response
-    const prompt = `
-      You are an empathetic AI tutor. 
-      Respond to: "${lastMessage}"
-      Provide a supportive and educational response.
-    `;
-
-    const result = await genModel.generateContent(prompt);
-    const response = result.response.text();
+    const result = await workflow.execute(initialState);
+    const response = result.messages[result.messages.length - 1];
 
     // Update chat with response
     await prisma.chat.update({

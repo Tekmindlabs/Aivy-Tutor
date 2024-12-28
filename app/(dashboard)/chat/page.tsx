@@ -11,7 +11,7 @@ import { ModelSelector } from "@/components/chat/model-selector";
 import { ChatMessage } from "@/components/chat/chat-message";
 
 export default function ChatPage() {
-  const [model, setModel] = useState("gemini-pro");
+  const [model, setModel] = useState("learnlm-1.5-pro-experimental");
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     api: "/api/chat",
     body: { model },

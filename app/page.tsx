@@ -1,7 +1,7 @@
-import { getSession } from "auth/auth.ts";
+import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { AuthDialog } from "components/auth/auth-dialog.tsx";
-import { Button } from "components/ui/button.tsx";
+import { AuthDialog } from "@/components/auth/auth-dialog";
+import { Button } from "@/components/ui/button";
 
 export default async function Home() {
   const session = await getSession();
@@ -18,7 +18,6 @@ export default async function Home() {
           Your personal AI-powered learning companion
         </p>
         
-        {/* Hero Image */}
         <div className="my-8">
           <img 
             src="/hero-image.png" 

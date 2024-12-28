@@ -1,8 +1,12 @@
+
 import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { createOrchestrationAgent, AgentRole, AgentState } from "@/lib/ai/agents";
-import { StreamingTextResponse, LangChainStream } from 'ai';
+import { StreamingTextResponse, LangChainStream, Message } from 'ai';
 import { prisma } from "@/lib/prisma";
+import { ChatCompletionMessage } from "ai/react";
+
+export const runtime = 'edge'; // Enable edge runtime
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,28 +25,28 @@ export async function POST(req: NextRequest) {
       return new Response("User not found", { status: 404 });
     }
 
-    // Parse request body
-    const { messages } = await req.json();
+    // Parse request body with proper typing
+    const { messages }: { messages: ChatCompletionMessage[] } = await req.json();
     
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return new Response("Invalid messages format", { status: 400 });
+    if (!messages?.length) {
+      return new Response("No messages provided", { status: 400 });
     }
 
     const lastMessage = messages[messages.length - 1].content;
     
-    // Create streaming handlers correctly
-    const { stream, handlers: streamHandlers } = LangChainStream();
+    // Create proper stream with Vercel AI SDK
+    const { stream, handlers } = LangChainStream();
 
     // Create chat record in database
     const chat = await prisma.chat.create({
       data: {
         userId: user.id,
         message: lastMessage,
-        response: "", // Initial empty response
+        response: "",
       },
     });
 
-    // Process in background to avoid blocking the stream
+    // Process in background
     (async () => {
       try {
         const workflow = await createOrchestrationAgent();
@@ -65,31 +69,33 @@ export async function POST(req: NextRequest) {
 
         const response = result.messages[result.messages.length - 1];
 
-        // Stream the response using handleLLMNewToken
-        const chunks = response.split(' ');
+        // Stream response chunks with proper markdown formatting
+        const chunks = response.split(/(\n\n|\n(?=[#-]))/);
         for (const chunk of chunks) {
-          await streamHandlers.handleLLMNewToken(chunk + ' ');
+          if (chunk.trim()) {
+            await handlers.handleLLMNewToken(chunk);
+          }
         }
 
-        // Signal end of streaming using handleLLMEnd
-        await streamHandlers.handleLLMEnd({ generations: [] }, "");
+        await handlers.handleLLMEnd();
 
-        // Update chat with final response
+        // Update chat record with final response
         await prisma.chat.update({
           where: { id: chat.id },
           data: { response },
         });
 
       } catch (error) {
-        console.error("Workflow processing error:", error);
+        console.error("Workflow error:", error);
         
-        const errorMessage = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
-        
-        // Send error through stream using handleLLMNewToken
-        await streamHandlers.handleLLMNewToken(errorMessage);
-        await streamHandlers.handleLLMEnd({ generations: [] }, "");
+        const errorMessage = error instanceof Error 
+          ? `Error: ${error.message}`
+          : "An unexpected error occurred";
 
-        // Update chat with error
+        await handlers.handleLLMNewToken(errorMessage);
+        await handlers.handleLLMEnd();
+
+        // Update chat with error message
         await prisma.chat.update({
           where: { id: chat.id },
           data: { 
@@ -103,16 +109,60 @@ export async function POST(req: NextRequest) {
     return new StreamingTextResponse(stream, {
       headers: {
         'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
+        'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
       },
     });
-
+    
   } catch (error) {
-    console.error("Chat error:", error);
+    console.error("API error:", error);
     return new Response(
       JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Unknown error occurred" 
+        error: error instanceof Error ? error.message : "Internal server error" 
+      }), 
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
+}
+
+// Optionally add a GET route to fetch chat history
+export async function GET(req: NextRequest) {
+  try {
+    const session = await getSession();
+    if (!session?.user?.email) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+      include: {
+        chats: {
+          orderBy: { createdAt: 'desc' },
+          take: 50, // Limit to last 50 chats
+        },
+      },
+    });
+
+    if (!user) {
+      return new Response("User not found", { status: 404 });
+    }
+
+    return new Response(
+      JSON.stringify({ chats: user.chats }), 
+      { 
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+
+  } catch (error) {
+    console.error("Get chats error:", error);
+    return new Response(
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : "Internal server error" 
       }), 
       { 
         status: 500,

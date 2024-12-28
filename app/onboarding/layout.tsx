@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
 
 export default async function OnboardingLayout({
   children,
@@ -10,6 +11,16 @@ export default async function OnboardingLayout({
   
   if (!session) {
     redirect("/api/auth/signin");
+  }
+
+  // Check if user is already onboarded
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { onboarded: true },
+  });
+
+  if (user?.onboarded) {
+    redirect("/dashboard");
   }
 
   return (

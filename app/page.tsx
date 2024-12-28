@@ -1,12 +1,46 @@
+import { getSession } from "auth/auth.ts";
 import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth/session";
+import { AuthDialog } from "components/auth/auth-dialog.tsx";
+import { Button } from "components/ui/button.tsx";
 
 export default async function Home() {
-  const user = await getCurrentUser();
+  const session = await getSession();
   
-  if (!user) {
-    redirect("/auth/signin");
+  if (session) {
+    redirect("/dashboard");
   }
 
-  redirect("/dashboard");
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center">
+      <div className="text-center space-y-6">
+        <h1 className="text-4xl font-bold">Welcome to Aivy Tutor</h1>
+        <p className="text-xl text-muted-foreground">
+          Your personal AI-powered learning companion
+        </p>
+        
+        {/* Hero Image */}
+        <div className="my-8">
+          <img 
+            src="/hero-image.png" 
+            alt="Aivy Tutor Hero" 
+            className="max-w-2xl mx-auto"
+          />
+        </div>
+
+        <div className="flex gap-4 justify-center">
+          <AuthDialog mode="signup">
+            <Button size="lg" variant="default">
+              Start Learning
+            </Button>
+          </AuthDialog>
+
+          <AuthDialog mode="signin">
+            <Button size="lg" variant="outline">
+              Login
+            </Button>
+          </AuthDialog>
+        </div>
+      </div>
+    </div>
+  );
 }

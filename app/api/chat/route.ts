@@ -6,12 +6,23 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(req: NextRequest) {
   try {
+    // Get user session and verify authentication
     const session = await getSession();
-    if (!session?.user?.id) {
+    if (!session?.user?.email) {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    const { messages, model = "learnlm-1.5-pro-experimental" } = await req.json();
+    // Find the user in database to ensure they exist
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email }
+    });
+
+    if (!user?.id) {
+      return new Response("User not found", { status: 404 });
+    }
+
+    // Parse request body
+    const { messages } = await req.json();
     
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response("Invalid messages format", { status: 400 });
@@ -19,15 +30,15 @@ export async function POST(req: NextRequest) {
 
     const lastMessage = messages[messages.length - 1].content;
     
-    // Create a readable stream
+    // Create streaming handlers
     const { stream, handlers } = LangChainStream();
 
-    // Create chat in database
+    // Create chat record in database
     const chat = await prisma.chat.create({
       data: {
-        userId: session.user.id,
+        userId: user.id,
         message: lastMessage,
-        response: "",
+        response: "", // Initial empty response
       },
     });
 
@@ -47,41 +58,56 @@ export async function POST(req: NextRequest) {
         };
 
         const result = await workflow.execute(initialState);
-        const response = result.messages[result.messages.length - 1];
-
-        // Stream the response token by token
-        const tokens = response.split(' ');
-        for (const token of tokens) {
-          // Use write method directly on the stream
-          stream.write(new TextEncoder().encode(token + ' '));
+        
+        if (!result?.messages?.length) {
+          throw new Error("Invalid response from workflow");
         }
 
-        // End the stream
-        stream.end();
+        const response = result.messages[result.messages.length - 1];
+
+        // Stream the response using handlers
+        const chunks = response.split(' ');
+        for (const chunk of chunks) {
+          handlers.queue(chunk + ' ');
+        }
+
+        // Signal end of streaming
+        handlers.done();
 
         // Update chat with final response
         await prisma.chat.update({
           where: { id: chat.id },
           data: { response },
         });
+
       } catch (error) {
         console.error("Workflow processing error:", error);
         
-        // Write error to stream
-        stream.write(new TextEncoder().encode(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`));
-        stream.end();
+        const errorMessage = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        
+        // Send error through stream
+        handlers.queue(errorMessage);
+        handlers.done();
 
         // Update chat with error
         await prisma.chat.update({
           where: { id: chat.id },
           data: { 
-            response: `Error occurred during processing: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            response: errorMessage,
           },
         });
       }
     })();
 
-    return new StreamingTextResponse(stream);
+    // Return streaming response
+    return new StreamingTextResponse(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+
   } catch (error) {
     console.error("Chat error:", error);
     return new Response(

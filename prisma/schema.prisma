@@ -75,11 +75,8 @@ model Progress {
 model VerificationToken {
 
   identifier String
-
   token      String   @unique
-
   expires    DateTime
-
 
   @@unique([identifier, token])
 
@@ -88,17 +85,11 @@ model VerificationToken {
 model Chat {
 
   id        String   @id @default(cuid())
-
   userId    String
-
   message   String   @db.Text
-
   response  String   @db.Text
-
   createdAt DateTime @default(now())
-
   updatedAt DateTime @updatedAt
-
   user      User     @relation(fields: [userId], references: [id])
 
 }

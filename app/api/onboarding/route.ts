@@ -18,13 +18,11 @@ export async function POST(req: Request) {
       data: {
         ...validatedData,
         onboarded: true,
-        consentDate: new Date(),
       },
     });
 
-    return NextResponse.json({ success: true });
+    return new NextResponse("OK", { status: 200 });
   } catch (error) {
-    console.error("Onboarding error:", error);
-    return new NextResponse("Internal error", { status: 500 });
+    return new NextResponse("Internal Server Error", { status: 500 });
   }
 }

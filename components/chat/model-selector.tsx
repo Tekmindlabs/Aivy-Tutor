@@ -7,8 +7,8 @@ import {
 } from "@/components/ui/select";
 
 const models = [
-  { id: "gemini-pro", name: "Gemini Pro" },
-  { id: "gemini-pro-vision", name: "Gemini Pro Vision" },
+  { id: "gemini-2.0-flash-exp", name: "gemini-2.0-flash-exp" },
+  { id: "learnlm-1.5-pro-experimental", name: "learnlm-1.5-pro-experimental" },
 ];
 
 interface ModelSelectorProps {

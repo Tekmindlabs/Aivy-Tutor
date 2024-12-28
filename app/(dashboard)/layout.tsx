@@ -1,13 +1,13 @@
-import { Navbar } from "@/components/layout/navbar";
-import { auth } from "@/auth";
+import { getSession } from "@/lib/auth/session"; // Change this import
 import { redirect } from "next/navigation";
+import { Navbar } from "@/components/layout/navbar";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const session = await getSession(); // Use getSession instead of auth
   
   if (!session) {
     redirect("/api/auth/signin");

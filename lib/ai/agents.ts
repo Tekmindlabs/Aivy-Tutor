@@ -4,9 +4,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 
 // Define different agent types
-type AgentRole = 'master' | 'emotional' | 'tutor' | 'researcher' | 'validator';
+export type AgentRole = 'master' | 'emotional' | 'tutor' | 'researcher' | 'validator';
 
-type AgentState = {
+export type AgentState = {
   messages: string[];
   currentStep: string;
   emotionalState: string;

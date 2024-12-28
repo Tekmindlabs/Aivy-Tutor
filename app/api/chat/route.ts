@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth/session";
-import { createOrchestrationAgent } from "@/lib/ai/agents";
+import { createOrchestrationAgent, AgentRole, AgentState } from "@/lib/ai/agents";
 import { StreamingTextResponse, LangChainStream } from 'ai';
 import { prisma } from "@/lib/prisma";
 
@@ -30,8 +30,8 @@ export async function POST(req: NextRequest) {
 
     const lastMessage = messages[messages.length - 1].content;
     
-    // Create streaming handlers
-    const { stream, handlers } = LangChainStream();
+    // Create streaming handlers correctly
+    const { stream, handlers: streamHandlers } = LangChainStream();
 
     // Create chat record in database
     const chat = await prisma.chat.create({
@@ -46,12 +46,12 @@ export async function POST(req: NextRequest) {
     (async () => {
       try {
         const workflow = await createOrchestrationAgent();
-        const initialState = {
+        const initialState: AgentState = {
           messages: [lastMessage],
           currentStep: "emotional_analysis",
           emotionalState: "",
           context: {
-            role: "master",
+            role: "master" as AgentRole,
             analysis: {},
             recommendations: {}
           }
@@ -65,14 +65,14 @@ export async function POST(req: NextRequest) {
 
         const response = result.messages[result.messages.length - 1];
 
-        // Stream the response using handlers
+        // Stream the response using handleLLMNewToken
         const chunks = response.split(' ');
         for (const chunk of chunks) {
-          handlers.queue(chunk + ' ');
+          await streamHandlers.handleLLMNewToken(chunk + ' ');
         }
 
-        // Signal end of streaming
-        handlers.done();
+        // Signal end of streaming using handleLLMEnd
+        await streamHandlers.handleLLMEnd({ generations: [] }, "");
 
         // Update chat with final response
         await prisma.chat.update({
@@ -85,9 +85,9 @@ export async function POST(req: NextRequest) {
         
         const errorMessage = `Error: ${error instanceof Error ? error.message : 'Unknown error'}`;
         
-        // Send error through stream
-        handlers.queue(errorMessage);
-        handlers.done();
+        // Send error through stream using handleLLMNewToken
+        await streamHandlers.handleLLMNewToken(errorMessage);
+        await streamHandlers.handleLLMEnd({ generations: [] }, "");
 
         // Update chat with error
         await prisma.chat.update({

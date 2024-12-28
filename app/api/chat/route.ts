@@ -1,22 +1,24 @@
-
 import { NextRequest } from "next/server";
 import { getSession } from "@/lib/auth/session";
 import { createOrchestrationAgent, AgentRole, AgentState } from "@/lib/ai/agents";
-import { StreamingTextResponse, LangChainStream, Message } from 'ai';
+import { StreamingTextResponse, LangChainStream } from 'ai';
 import { prisma } from "@/lib/prisma";
-import { ChatCompletionMessage } from "ai/react";
 
-export const runtime = 'edge'; // Enable edge runtime
+// Define the ChatCompletionMessage type since it's not exported from ai/react
+interface ChatCompletionMessage {
+  content: string;
+  role: 'user' | 'assistant' | 'system';
+}
+
+export const runtime = 'edge';
 
 export async function POST(req: NextRequest) {
   try {
-    // Get user session and verify authentication
     const session = await getSession();
     if (!session?.user?.email) {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    // Find the user in database to ensure they exist
     const user = await prisma.user.findUnique({
       where: { email: session.user.email }
     });
@@ -25,7 +27,6 @@ export async function POST(req: NextRequest) {
       return new Response("User not found", { status: 404 });
     }
 
-    // Parse request body with proper typing
     const { messages }: { messages: ChatCompletionMessage[] } = await req.json();
     
     if (!messages?.length) {
@@ -34,10 +35,12 @@ export async function POST(req: NextRequest) {
 
     const lastMessage = messages[messages.length - 1].content;
     
-    // Create proper stream with Vercel AI SDK
-    const { stream, handlers } = LangChainStream();
+    // Create stream with proper arguments
+    const { stream, handlers } = LangChainStream({
+      experimental_streamData: true
+    });
 
-    // Create chat record in database
+    // Create chat record
     const chat = await prisma.chat.create({
       data: {
         userId: user.id,
@@ -46,7 +49,6 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Process in background
     (async () => {
       try {
         const workflow = await createOrchestrationAgent();
@@ -69,7 +71,6 @@ export async function POST(req: NextRequest) {
 
         const response = result.messages[result.messages.length - 1];
 
-        // Stream response chunks with proper markdown formatting
         const chunks = response.split(/(\n\n|\n(?=[#-]))/);
         for (const chunk of chunks) {
           if (chunk.trim()) {
@@ -79,7 +80,6 @@ export async function POST(req: NextRequest) {
 
         await handlers.handleLLMEnd();
 
-        // Update chat record with final response
         await prisma.chat.update({
           where: { id: chat.id },
           data: { response },
@@ -95,24 +95,14 @@ export async function POST(req: NextRequest) {
         await handlers.handleLLMNewToken(errorMessage);
         await handlers.handleLLMEnd();
 
-        // Update chat with error message
         await prisma.chat.update({
           where: { id: chat.id },
-          data: { 
-            response: errorMessage,
-          },
+          data: { response: errorMessage },
         });
       }
     })();
 
-    // Return streaming response
-    return new StreamingTextResponse(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache, no-transform',
-        'Connection': 'keep-alive',
-      },
-    });
+    return new StreamingTextResponse(stream);
     
   } catch (error) {
     console.error("API error:", error);
@@ -128,7 +118,6 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// Optionally add a GET route to fetch chat history
 export async function GET(req: NextRequest) {
   try {
     const session = await getSession();
@@ -139,9 +128,9 @@ export async function GET(req: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
       include: {
-        chats: {
+        Chat: {
           orderBy: { createdAt: 'desc' },
-          take: 50, // Limit to last 50 chats
+          take: 50,
         },
       },
     });
@@ -151,7 +140,7 @@ export async function GET(req: NextRequest) {
     }
 
     return new Response(
-      JSON.stringify({ chats: user.chats }), 
+      JSON.stringify({ chats: user.Chat }), 
       { 
         status: 200,
         headers: { 'Content-Type': 'application/json' }

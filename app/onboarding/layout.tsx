@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { getSession } from "@/lib/auth";  // or "@/auth/auth" depending on your project structure
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 
@@ -7,7 +7,7 @@ export default async function OnboardingLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const session = await getSession();
   
   if (!session) {
     redirect("/api/auth/signin");
@@ -15,7 +15,7 @@ export default async function OnboardingLayout({
 
   // Check if user is already onboarded
   const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+    where: { id: session.user?.id },
     select: { onboarded: true },
   });
 

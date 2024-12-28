@@ -6,15 +6,21 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ModelSelector } from "@/components/chat/model-selector";
 import { ChatMessage } from "@/components/chat/chat-message";
 
 export default function ChatPage() {
-  const [model, setModel] = useState("learnlm-1.5-pro-experimental");
+  const [model, setModel] = useState("gemini-pro");
+  const [error, setError] = useState<string | null>(null);
+
   const { messages, input, handleInputChange, handleSubmit, isLoading } = useChat({
     api: "/api/chat",
     body: { model },
+    onError: (error) => {
+      console.error("Chat error:", error);
+      setError(error.message);
+    }
   });
 
   return (
@@ -24,12 +30,25 @@ export default function ChatPage() {
         <ModelSelector value={model} onValueChange={setModel} />
       </div>
       
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      
       <Card className="flex h-[600px] flex-col">
         <ScrollArea className="flex-1 p-4">
           <div className="space-y-4">
             {messages.map((message) => (
               <ChatMessage key={message.id} message={message} />
             ))}
+            {isLoading && (
+              <div className="flex items-center justify-center py-4">
+                <span className="text-sm text-muted-foreground">
+                  AI is thinking...
+                </span>
+              </div>
+            )}
           </div>
         </ScrollArea>
 
@@ -43,7 +62,7 @@ export default function ChatPage() {
               className="flex-1"
             />
             <Button type="submit" disabled={isLoading}>
-              Send
+              {isLoading ? "Sending..." : "Send"}
             </Button>
           </form>
         </div>

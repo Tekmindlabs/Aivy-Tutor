@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
-import { getSession } from "@/lib/auth/session";
-import { createOrchestrationAgent, AgentRole, AgentState } from "@/lib/ai/agents";
+import { getSession } from "lib/auth/session";
+import { createOrchestrationAgent, AgentRole, AgentState } from "lib/ai/agents";
 import { StreamingTextResponse, LangChainStream } from 'ai';
-import { prisma } from "@/lib/prisma";
+import { prisma } from "lib/prisma";
 
 // Define the ChatCompletionMessage type since it's not exported from ai/react
 interface ChatCompletionMessage {
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Create chat record
-    const chat = await prisma.chat.create({
+    const chat = await prisma.Chat.create({
       data: {
         userId: user.id,
         message: lastMessage,
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
 
         await handlers.handleLLMEnd();
 
-        await prisma.chat.update({
+        await prisma.Chat.update({
           where: { id: chat.id },
           data: { response },
         });
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
         await handlers.handleLLMNewToken(errorMessage);
         await handlers.handleLLMEnd();
 
-        await prisma.chat.update({
+        await prisma.Chat.update({
           where: { id: chat.id },
           data: { response: errorMessage },
         });
@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
       include: {
-        Chat: {
+        chats: {
           orderBy: { createdAt: 'desc' },
           take: 50,
         },
@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
     }
 
     return new Response(
-      JSON.stringify({ chats: user.Chat }), 
+      JSON.stringify({ chats: user.chats }), 
       { 
         status: 200,
         headers: { 'Content-Type': 'application/json' }

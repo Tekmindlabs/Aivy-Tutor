@@ -1,13 +1,12 @@
-import NextAuth from "next-auth";
-import { authConfig } from "./auth.config";
-import Google from "next-auth/providers/google";
+import { NextAuthOptions } from "next-auth";
+import GoogleProvider from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
 
-export const { auth, signIn, signOut, handlers } = NextAuth({
+export const authConfig: NextAuthOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
-    Google({
+    GoogleProvider({
       clientId: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
@@ -19,12 +18,9 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
       }
       return session;
     },
-    async redirect({ url, baseUrl }) {
-      return url.startsWith(baseUrl) ? url : baseUrl + "/dashboard";
-    },
   },
   pages: {
-    signIn: "/api/auth/signin",
-    error: "/api/auth/error",
+    signIn: "/auth/signin",
+    error: "/auth/error",
   },
-});
+};

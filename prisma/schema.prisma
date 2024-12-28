@@ -69,3 +69,16 @@ model Progress {
   lesson    Lesson   @relation(fields: [lessonId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
 }
+
+model VerificationToken {
+
+  identifier String
+
+  token      String   @unique
+
+  expires    DateTime
+
+
+  @@unique([identifier, token])
+
+}

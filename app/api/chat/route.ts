@@ -11,13 +11,15 @@ export async function POST(req: NextRequest) {
       return new Response("Unauthorized", { status: 401 });
     }
 
-    const { messages, model =  "learnlm-1.5-pro-experimental" } = await req.json();
+    const { messages, model = "learnlm-1.5-pro-experimental" } = await req.json();
     
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response("Invalid messages format", { status: 400 });
     }
 
     const lastMessage = messages[messages.length - 1].content;
+    
+    // Create a readable stream
     const { stream, handlers } = LangChainStream();
 
     // Create chat in database
@@ -50,11 +52,12 @@ export async function POST(req: NextRequest) {
         // Stream the response token by token
         const tokens = response.split(' ');
         for (const token of tokens) {
-          handlers.onToken(token + ' ');
+          // Use write method directly on the stream
+          stream.write(new TextEncoder().encode(token + ' '));
         }
 
-        // Mark the stream as complete
-        handlers.onCompletion(response);
+        // End the stream
+        stream.end();
 
         // Update chat with final response
         await prisma.chat.update({
@@ -63,7 +66,18 @@ export async function POST(req: NextRequest) {
         });
       } catch (error) {
         console.error("Workflow processing error:", error);
-        handlers.onError(error);
+        
+        // Write error to stream
+        stream.write(new TextEncoder().encode(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`));
+        stream.end();
+
+        // Update chat with error
+        await prisma.chat.update({
+          where: { id: chat.id },
+          data: { 
+            response: `Error occurred during processing: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          },
+        });
       }
     })();
 

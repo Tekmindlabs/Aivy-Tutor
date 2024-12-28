@@ -1,4 +1,7 @@
-// /lib/ai/agents.ts
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
+// Initialize the Google AI client
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!);
 
 // Define different agent types
 type AgentRole = 'master' | 'emotional' | 'tutor' | 'researcher' | 'validator';
@@ -74,18 +77,79 @@ const createMasterAgent = (model: any) => async (state: AgentState) => {
 };
 
 // Create the orchestrated workflow
+
 export const createOrchestrationAgent = async () => {
-  const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+  const model = genAI.getGenerativeModel({ model: "gemini-pro" }); // Changed from "learnlm-1.5-pro-experimental" to "gemini-pro"
+
 
   const workflow = new AgentGraph()
+
     .addNode("emotional_analysis", createEmotionalAgent(model))
+
     .addNode("research", createResearcherAgent(model))
+
     .addNode("validation", createValidatorAgent(model))
+
     .addNode("master", createMasterAgent(model))
+
     .setEntryPoint("emotional_analysis")
+
     .addEdge("emotional_analysis", "research")
+
     .addEdge("research", "validation")
+
     .addEdge("validation", "master");
 
+
   return workflow;
+
 };
+
+// Add AgentGraph class if not already defined elsewhere
+class AgentGraph {
+  private nodes: Map<string, Function>;
+  private edges: Map<string, string[]>;
+  private entryPoint: string;
+
+  constructor() {
+    this.nodes = new Map();
+    this.edges = new Map();
+    this.entryPoint = '';
+  }
+
+  addNode(name: string, fn: Function) {
+    this.nodes.set(name, fn);
+    return this;
+  }
+
+  addEdge(from: string, to: string) {
+    if (!this.edges.has(from)) {
+      this.edges.set(from, []);
+    }
+    this.edges.get(from)?.push(to);
+    return this;
+  }
+
+  setEntryPoint(name: string) {
+    this.entryPoint = name;
+    return this;
+  }
+
+  async execute(initialState: AgentState) {
+    let currentNode = this.entryPoint;
+    let state = initialState;
+
+    while (currentNode) {
+      const nodeFn = this.nodes.get(currentNode);
+      if (nodeFn) {
+        state = await nodeFn(state);
+      }
+
+      const nextNodes = this.edges.get(currentNode) || [];
+      currentNode = nextNodes[0]; // Simple linear flow
+    }
+
+    return state;
+  }
+}

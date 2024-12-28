@@ -1,7 +1,8 @@
-// app/api/auth/resend-verification/route.ts
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
-import { sendVerificationRequest } from "next-auth/providers/email";
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(req: Request) {
   try {
@@ -36,21 +37,20 @@ export async function POST(req: Request) {
       },
     });
 
-    // Send verification email
-    await sendVerificationRequest({
-      identifier: email,
-      url: `${process.env.NEXTAUTH_URL}/auth/verify?token=${token}`,
-      provider: {
-        server: {
-          host: process.env.EMAIL_SERVER_HOST,
-          port: process.env.EMAIL_SERVER_PORT,
-          auth: {
-            user: process.env.EMAIL_SERVER_USER,
-            pass: process.env.EMAIL_SERVER_PASSWORD,
-          },
-        },
-        from: process.env.EMAIL_FROM,
-      },
+    // Send verification email using Resend
+    await resend.emails.send({
+      from: process.env.EMAIL_FROM!,
+      to: email,
+      subject: 'Verify your email',
+      html: `
+        <div>
+          <h1>Verify your email</h1>
+          <p>Click the link below to verify your email:</p>
+          <a href="${process.env.NEXTAUTH_URL}/auth/verify?token=${token}">
+            Verify Email
+          </a>
+        </div>
+      `,
     });
 
     return NextResponse.json({ success: true });

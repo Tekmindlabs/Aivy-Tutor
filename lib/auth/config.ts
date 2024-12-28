@@ -1,90 +1,110 @@
 import { NextAuthOptions } from "next-auth";
+
 import GoogleProvider from "next-auth/providers/google";
+
 import EmailProvider from "next-auth/providers/email";
+
 import { PrismaAdapter } from "@auth/prisma-adapter";
+
 import { prisma } from "@/lib/prisma";
-import { User } from "@prisma/client";
-import { JWT } from "next-auth/jwt";
+
 import { Resend } from 'resend';
 
-// Initialize Resend
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-// Define types for session and callbacks
-interface SessionUser {
-  id: string;
-  name: string | null;
-  email: string | null;
-  emailVerified: Date | null;
-  image: string | null;
-}
-
-interface AuthorizedParams {
-  auth: {
-    user?: SessionUser;
-  } | null;
-  request: {
-    nextUrl: URL;
-  };
-}
 
 export const authConfig: NextAuthOptions = {
+
   adapter: PrismaAdapter(prisma),
+
   providers: [
+
     GoogleProvider({
+
       clientId: process.env.GOOGLE_CLIENT_ID!,
+
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+
     }),
+
     EmailProvider({
-      from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
-      sendVerificationRequest: async ({ identifier, url, provider }) => {
+
+      server: {
+
+        host: process.env.EMAIL_SERVER_HOST,
+
+        port: process.env.EMAIL_SERVER_PORT,
+
+        auth: {
+
+          user: process.env.EMAIL_SERVER_USER,
+
+          pass: process.env.EMAIL_SERVER_PASSWORD,
+
+        },
+
+      },
+
+      from: process.env.EMAIL_FROM,
+
+      async sendVerificationRequest({
+
+        identifier: email,
+
+        url,
+
+        provider: { from },
+
+      }) {
+
         try {
-          const { data, error } = await resend.emails.send({
-            from: provider.from!,
-            to: identifier,
-            subject: 'Sign in to Aivy Tutor',
+
+          const result = await resend.emails.send({
+
+            from: from,
+
+            to: email,
+
+            subject: "Sign in to Aivy Tutor",
+
             html: `
-              <!DOCTYPE html>
-              <html>
-                <head>
-                  <meta charset="utf-8">
-                  <title>Sign in to Aivy Tutor</title>
-                </head>
-                <body style="font-family: sans-serif; padding: 20px;">
-                  <h1 style="color: #333;">Sign in to Aivy Tutor</h1>
-                  <p>Click the link below to sign in to your account:</p>
-                  <a 
-                    href="${url}" 
-                    style="
-                      background-color: #4CAF50;
-                      color: white;
-                      padding: 14px 20px;
-                      text-decoration: none;
-                      border-radius: 4px;
-                      display: inline-block;
-                      margin: 10px 0;
-                    "
-                  >
-                    Sign in
-                  </a>
-                  <p style="color: #666; font-size: 14px;">
-                    If you didn't request this email, you can safely ignore it.
-                  </p>
-                </body>
-              </html>
+
+              <div>
+
+                <h1>Sign in to Aivy Tutor</h1>
+
+                <p>Click the link below to sign in to your account:</p>
+
+                <a href="${url}">Sign in</a>
+
+                <p>If you didn't request this email, you can safely ignore it.</p>
+
+              </div>
+
             `,
+
           });
 
-          if (error) {
-            console.error('Error sending email:', error);
-            throw new Error(error.message);
+
+          if (result.error) {
+
+            throw new Error(result.error.message);
+
           }
+
         } catch (error) {
-          console.error('Failed to send verification email:', error);
-          throw new Error('Failed to send verification email');
+
+          console.error("Error sending verification email", error);
+
+          throw new Error("Failed to send verification email");
+
         }
+
       },
+
     }),
+
   ],
   callbacks: {
     async jwt({ token, user }) {

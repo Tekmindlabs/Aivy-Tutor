@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     });
 
     // Create chat record
-    const chat = await prisma.Chat.create({
+    const chat = await prisma.chat.create({
       data: {
         userId: user.id,
         message: lastMessage,
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
 
         await handlers.handleLLMEnd();
 
-        await prisma.Chat.update({
+        await prisma.chat.update({
           where: { id: chat.id },
           data: { response },
         });
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
         await handlers.handleLLMNewToken(errorMessage);
         await handlers.handleLLMEnd();
 
-        await prisma.Chat.update({
+        await prisma.chat.update({
           where: { id: chat.id },
           data: { response: errorMessage },
         });

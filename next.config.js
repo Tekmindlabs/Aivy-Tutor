@@ -9,8 +9,10 @@ const nextConfig = {
       ...config.resolve.fallback,
       crypto: require.resolve('crypto-browserify'),
       stream: require.resolve('stream-browserify'),
+      http: require.resolve('stream-http'),        // Add this line
+      https: require.resolve('https-browserify'),  // Add this line
       fs: false,
-      path: false  // Add this line
+      path: false
     };
     return config;
   }

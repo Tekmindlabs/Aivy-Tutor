@@ -26,7 +26,7 @@ export const authConfig: NextAuthOptions = {
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
     EmailProvider({
-      from: process.env.EMAIL_FROM!,
+      from: process.env.RESEND_FROM!,
       async sendVerificationRequest({
         identifier: email,
         url,
@@ -46,7 +46,7 @@ export const authConfig: NextAuthOptions = {
               </div>
             `,
           });
-
+    
           if (result.error) {
             throw new Error(result.error.message);
           }

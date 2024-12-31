@@ -1,27 +1,25 @@
-import { getSession } from "@/lib/auth";
+import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
 
 export default async function OnboardingLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getSession();
-  
-  if (!session || !session.user?.id) {
-    redirect("/api/auth/signin");
+  const session = await auth();
+
+  if (!session?.user) {
+    redirect("/auth/signin");
   }
 
   // Check if user is already onboarded
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { onboarded: true },
-  });
-
-  if (user?.onboarded) {
-    redirect("/dashboard"); // Redirect to dashboard if already onboarded
+  if (session.user.onboarded) {
+    redirect("/chat");
   }
 
-  return <>{children}</>;
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-white to-gray-100 dark:from-gray-900 dark:to-black">
+      <main className="container mx-auto p-6">{children}</main>
+    </div>
+  );
 }
